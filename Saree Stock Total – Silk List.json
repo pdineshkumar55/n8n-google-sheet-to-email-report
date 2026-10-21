@@ -1,0 +1,145 @@
+{
+  "name": "Saree Stock Total – Silk List (OpenAI)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "m1",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1FJdPXb-31qzWn8U_XU7Zg6i5DPBB4xUKAIyaPI4jgIY",
+          "mode": "list",
+          "cachedResultName": "Saree stock list - SIS",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FJdPXb-31qzWn8U_XU7Zg6i5DPBB4xUKAIyaPI4jgIY/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Silk List",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1FJdPXb-31qzWn8U_XU7Zg6i5DPBB4xUKAIyaPI4jgIY/edit#gid=0"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "specifyRange",
+              "headerRow": 2,
+              "firstDataRow": 3
+            }
+          }
+        }
+      },
+      "id": "m2",
+      "name": "Read Silk List",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "XcrVxY7F0cLGBbP3",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---------- 1. Calculate stock summary ----------\nconst items = $input.all().map(i => i.json)\n  .filter(r => String(r['Item ID'] || '').trim().startsWith('SIS'));\n\nconst num = v => Number(String(v ?? '').replace(/[,₹\\s]/g, '')) || 0;\n\nlet inStockItems = 0, soldOutItems = 0, totalPieces = 0, costValue = 0, retailValue = 0;\nconst lowStock = [], mismatches = [];\n\nfor (const r of items) {\n  const qty = num(r['Stock']);\n  const status = String(r['Status'] || '').trim().toLowerCase();\n\n  if (status === 'sold out') soldOutItems++;\n  else if (status === 'in stock') inStockItems++;\n\n  totalPieces += qty;\n  costValue   += qty * num(r['Actual price']);\n  retailValue += qty * num(r['Selling price']);\n\n  if (qty === 1) lowStock.push({ id: r['Item ID'], name: r['Item name'] });\n  if ((status === 'sold out' && qty > 0) || (status === 'in stock' && qty === 0)) {\n    mismatches.push(`${r['Item ID']} (stock ${qty}, status \"${r['Status']}\")`);\n  }\n}\n\n// ---------- 2. Build HTML email ----------\nconst inr = n => '₹' + Number(n).toLocaleString('en-IN');\nconst today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });\n\nconst card = (label, value, color) => `\n  <td style=\"padding:12px;background:#f7f3ee;border-radius:8px;text-align:center;\">\n    <div style=\"font-size:12px;color:#666;\">${label}</div>\n    <div style=\"font-size:20px;font-weight:bold;color:${color};\">${value}</div>\n  </td>`;\n\nconst lowRows = lowStock.map((it, i) => `\n  <tr style=\"background:${i % 2 ? '#fff' : '#faf7f2'};\">\n    <td style=\"padding:6px 10px;border-bottom:1px solid #eee;\">${it.id}</td>\n    <td style=\"padding:6px 10px;border-bottom:1px solid #eee;\">${it.name}</td>\n  </tr>`).join('');\n\nconst mismatchBlock = mismatches.length\n  ? `<p style=\"color:#b00020;\"><b>⚠ Fix these rows:</b> ${mismatches.join(', ')}</p>`\n  : `<p style=\"color:#2e7d32;\">✓ No status mismatches found.</p>`;\n\nconst html = `\n<div style=\"font-family:Arial,sans-serif;max-width:640px;margin:auto;color:#222;\">\n  <h2 style=\"color:#8b1a1a;margin-bottom:4px;\">Sri Iniya Silks – Stock Report</h2>\n  <div style=\"color:#888;font-size:13px;margin-bottom:16px;\">Silk List · ${today}</div>\n\n  <table width=\"100%\" cellspacing=\"8\"><tr>\n    ${card('Total Items', items.length, '#222')}\n    ${card('In Stock', inStockItems, '#2e7d32')}\n    ${card('Sold Out', soldOutItems, '#b00020')}\n    ${card('Pieces', totalPieces, '#222')}\n  </tr></table>\n\n  <table width=\"100%\" cellspacing=\"8\"><tr>\n    ${card('Value at Cost', inr(costValue), '#222')}\n    ${card('Value at Selling Price', inr(retailValue), '#8b1a1a')}\n  </tr></table>\n\n  <h3 style=\"margin-top:24px;\">Low Stock – only 1 piece left (${lowStock.length})</h3>\n  <table width=\"100%\" style=\"border-collapse:collapse;font-size:13px;\">\n    <tr style=\"background:#8b1a1a;color:#fff;\">\n      <th style=\"padding:8px 10px;text-align:left;\">Item ID</th>\n      <th style=\"padding:8px 10px;text-align:left;\">Item Name</th>\n    </tr>\n    ${lowRows}\n  </table>\n\n  ${mismatchBlock}\n</div>`;\n\nreturn [{ json: { subject: `Saree Stock Report – ${today}`, html } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "f033e484-b674-460d-9a82-0216177cd8ee",
+      "name": "Prepare stock data"
+    },
+    {
+      "parameters": {
+        "sendTo": "pdineshkumar55@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        704,
+        0
+      ],
+      "id": "2b484cf8-7656-4883-9a98-84be2496ffe3",
+      "name": "Send a report mail",
+      "webhookId": "08b52970-248b-40e1-ba4b-8e8dc13217d5",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "2MFR7JcWSSYLQVsz",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Read Silk List": {
+      "main": [
+        [
+          {
+            "node": "Prepare stock data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Read Silk List",
+            "type": "main"
+          }
+        ]
+      ]
+    },
+    "Prepare stock data": {
+      "main": [
+        [
+          {
+            "node": "Send a report mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timezone": "Asia/Kolkata"
+  },
+  "versionId": "1581b326-6525-4581-8523-da217f887c85",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4f7ba3e91c23a56f220423a40ea251845f171cdbae9231d26d58fbcb0e3a1c2b"
+  },
+  "nodeGroups": [],
+  "id": "CZBjBdCgl6fg2OLp",
+  "tags": []
+}
